@@ -14,7 +14,7 @@ from datasets import *
 from det_tools import *
 from eval_tools import draw_keypoints
 from common.tf_train_utils import get_optimizer
-from imageio import imread, imsave
+# from imageio import imread, imsave
 from inference import *
 
 
@@ -115,7 +115,8 @@ def main(config):
     avg_elapsed_time = 0
 
     for img_path in tqdm(img_paths):
-        photo = imread(img_path)
+        # photo = imread(img_path)
+        photo = cv2.imread(img_path, cv2.IMREAD_COLOR)
         height, width = photo.shape[:2]
         longer_edge = max(height, width)
         if config.max_longer_edge > 0 and longer_edge > config.max_longer_edge:
@@ -156,9 +157,12 @@ def main(config):
             scale_img = (outs['scale_maps'][0]*255/scale_range).astype(np.uint8)
             ori_img = (outs['degree_maps'][0]*255).astype(np.uint8)
             out_img_path = os.path.join(config.out_dir, os.path.basename(img_path))
-            imsave(out_img_path, kp_img)
-            imsave(out_img_path+'-scl.jpg', scale_img)
-            imsave(out_img_path+'-ori.jpg', ori_img)
+            # imsave(out_img_path, kp_img)
+            # imsave(out_img_path+'-scl.jpg', scale_img)
+            # imsave(out_img_path+'-ori.jpg', ori_img)
+            cv2.imwrite(out_img_path, kp_img)
+            cv2.imwrite(out_img_path+'-scl.jpg', scale_img)
+            cv2.imwrite(out_img_path+'-ori.jpg', ori_img)
             np.savez(out_img_path+'.npz', kpts=outs['kpts'], descs=outs['feats'], size=np.array([height, width]),
                      scales=outs['kpts_scale'], oris=outs['kpts_ori'])
         else:
