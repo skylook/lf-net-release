@@ -133,7 +133,7 @@ def detect_compute(photo, sess, ops, photo_ph, config):
 
     return outs
 
-def dump_debug(photo, outs, out_dir, config):
+def dump_debug(name, photo, outs, config):
     height, width = photo.shape[:2]
 
     # draw key
@@ -142,13 +142,16 @@ def dump_debug(photo, outs, out_dir, config):
     if scale_range == 0:
         scale_range = 1.0
 
-    out_npz_path = os.path.join(out_dir, 'feature.npz')
+    base_name = os.path.basename(name)
+
+    out_img_path = os.path.join(config.out_dir, name)
+    out_npz_path = os.path.join(config.out_dir, base_name +'.npz')
 
     if config.full_output:
         scale_img = (outs['scale_maps'][0]*255/scale_range).astype(np.uint8)
         ori_img = (outs['degree_maps'][0]*255).astype(np.uint8)
 
-        out_img_path = os.path.join(config.out_dir, os.path.basename(out_path))
+
         # imsave(out_img_path, kp_img)
         # imsave(out_img_path+'-scl.jpg', scale_img)
         # imsave(out_img_path+'-ori.jpg', ori_img)
@@ -156,10 +159,10 @@ def dump_debug(photo, outs, out_dir, config):
         cv2.imwrite(out_img_path+'-scl.jpg', scale_img)
         cv2.imwrite(out_img_path+'-ori.jpg', ori_img)
 
-        np.savez(out_img_path+'.npz', kpts=outs['kpts'], descs=outs['feats'], size=np.array([height, width]),
+        np.savez(out_npz_path, kpts=outs['kpts'], descs=outs['feats'], size=np.array([height, width]),
                  scales=outs['kpts_scale'], oris=outs['kpts_ori'])
     else:
-        np.savez(out_path, kpts=outs['kpts'], feats=outs['feats'], size=np.array([height, width]))
+        np.savez(out_npz_path, kpts=outs['kpts'], feats=outs['feats'], size=np.array([height, width]))
 
 def main(config):
 
@@ -219,7 +222,7 @@ def main(config):
     outs = detect_compute(photo=query_img, sess=sess, ops=ops, photo_ph=photo_ph, config=config)
 
     # 绘制和输出
-    dump_debug(photo=query_img, outs=outs, out_dir='./outputs', config=config)
+    dump_debug(name='debug.png', photo=query_img, outs=outs, config=config)
 
     print('Done...')
 
