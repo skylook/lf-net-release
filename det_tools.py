@@ -652,6 +652,7 @@ def find_random_negative_from_myself_less_memory(feats, batch_inds, num_kpts, ba
 
 #     return min_dist1, arg_min1, min_dist2, arg_min2
 
+# 输出分别为：最短距离，最短距离对应idx
 def nearest_neighbors(feats1, feats2):
     # feats1.shape = [K,D]
     # feats2.shape = [L,D]

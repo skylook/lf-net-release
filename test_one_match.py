@@ -12,7 +12,7 @@ import pickle
 from datasets import *
 
 from det_tools import *
-from eval_tools import draw_keypoints
+from eval_tools import compute_sift, compute_sift_multi_scale, draw_match, draw_keypoints, draw_match2
 from common.tf_train_utils import get_optimizer
 # from imageio import imread, imsave
 from inference import *
@@ -103,7 +103,7 @@ def detect_compute(photo, sess, ops, photo_ph, config):
             'scale_maps': ops['scale_maps'],
             'degree_maps': ops['degree_maps'],
         }
-        outs = sess.run(fetch_dict, feed_dict=feed_dict)
+        # outs = sess.run(fetch_dict, feed_dict=feed_dict)
         # draw key
         # kp_img = draw_keypoints(rgb, outs['kpts'])
         # scale_range = config.net_max_scale-config.net_min_scale
@@ -127,11 +127,103 @@ def detect_compute(photo, sess, ops, photo_ph, config):
             'kpts': ops['kpts'],
             'feats': ops['feats'],
         }
-        outs = sess.run(fetch_dict, feed_dict=feed_dict)
         # out_path = os.path.join(config.out_dir, os.path.basename(img_path)+'.npz')
         # np.savez(out_path, kpts=outs['kpts'], feats=outs['feats'], size=np.array([height, width]))
 
+    outs = sess.run(fetch_dict, feed_dict=feed_dict)
+
     return outs
+
+def match(query_feat, train_feat):
+    # print('kpts1 = {}'.format(kpts1[0]))
+    # print('desc_feats1.shape = {}'.format(desc_feats1[0].shape))
+    # print('desc_feats1 = {}'.format(desc_feats1[0]))
+
+    bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=False)
+
+    # Match descriptors.
+    # matches = bf.match(query_feat, train_feat)
+
+    matches = bf.knnMatch(query_feat, train_feat, k=2)
+
+    # print('matches[0] = {}'.format(matches[0]))
+
+    # Apply ratio test
+    good_matches = []
+    for m, n in matches:
+        if m.distance < 0.75 * n.distance:
+            good_matches.append(m)
+
+    print('good_matches[0] = {}'.format(good_matches[0]))
+    # Sort them in the order of their distance.
+    good_matches = sorted(good_matches, key=lambda x: x.distance)
+
+    # nn_dist, nn_inds2, _, _, _ = nearest_neighbors(desc_feats1, desc_feats2)
+    # print('nn_inds2 = {}'.format(nn_inds2))
+    # kpts2_corr = tf.cast(tf.gather(kpts2, nn_inds2), tf.float32)
+
+    # kpts1_int = tf.cast(kpts1, tf.int32)
+    # heatmaps1w, visible_masks1, xy_maps1to2 = \
+    #     inverse_warp_view_2_to_1(heatmaps2, depths2, depths1, c2Tc1s,
+    #                              K1=Ks1, K2=Ks2,
+    #                              inv_thetas1=inv_thetas1, thetas2=thetas2,
+    #                              depth_thresh=config.depth_thresh)
+    # heatmaps2w, visible_masks2, xy_maps2to1 = \
+    #     inverse_warp_view_2_to_1(heatmaps1, depths1, depths2, c1Tc2s,
+    #                              K1=Ks2, K2=Ks1,
+    #                              inv_thetas1=inv_thetas2, thetas2=thetas1,
+    #                              depth_thresh=config.depth_thresh)
+    # visible_masks1 = visible_masks1 * valid_masks1  # take 'and'
+    # visible_masks2 = visible_masks2 * valid_masks2
+    #
+    # kpts2w = batch_gather_keypoints(xy_maps1to2, batch_inds1, kpts1_int)
+    # kpvis2w = batch_gather_keypoints(visible_masks1, batch_inds1, kpts1_int)[:, 0]
+
+    # match_dist = tf.maximum(tf.cast(tf.reduce_sum(tf.squared_difference(kpts2_corr, kpts2w), axis=1), tf.float32), 1e-6)
+    # match_dist = tf.sqrt(match_dist)
+    # is_match = tf.cast(tf.less_equal(match_dist, config.dist_thresh), tf.float32) * kpvis2w
+
+    # return nn_dist, nn_inds2
+    return good_matches
+
+def draw_matches(query_image, query_pts, train_image, train_pts, matches):
+    height, width = query_image.shape[:2]
+    canvas = np.concatenate([train_image, query_image], axis=1)
+
+    print('canvas.shape[-1] = {}'.format(canvas.shape[-1]))
+
+    if canvas.shape[-1] == 1:
+        canvas = np.repeat(canvas, 3, -1) # gray to rgb
+
+    for m in matches:
+        queryIdx = m.queryIdx
+        trainIdx = m.trainIdx
+        # queryIdx = m.trainIdx
+        # trainIdx = m.queryIdx
+        x1,y1 = train_pts[trainIdx]
+        x2,y2 = query_pts[queryIdx]
+        x1 = int(x1+0.5)
+        y1 = int(y1+0.5)
+        x2 = int(x2+0.5)
+        y2 = int(y2+0.5)
+
+        # color = tuple(np.round(np.random.rand(3) * 255).astype(np.uint8))
+        # rnd = np.round(np.random.rand(3) * 255).astype(np.int32)
+        # color = (rnd[0], rnd[1], rnd[2])
+        # color = (251, 62, 63)
+        # color = (0,0xFF,0)
+        # color = list(np.random.choice(range(256), size=3))
+        # color = np.round(np.random.rand(3) * 255).astype(np.int32)
+        color1 = np.uint8(np.random.uniform(0, 255, 3))
+
+        color = tuple(map(int, color1))
+
+        print('color = {}'.format(color))
+        cv2.line(canvas, (x1, y1), (x2 + width, y2), color, 1)
+        cv2.circle(canvas, (x1, y1), 2, color)
+        cv2.circle(canvas, (x2 + width, y2), 2, color)
+
+    return canvas
 
 def dump_debug(name, photo, outs, config):
     height, width = photo.shape[:2]
@@ -163,6 +255,14 @@ def dump_debug(name, photo, outs, config):
                  scales=outs['kpts_scale'], oris=outs['kpts_ori'])
     else:
         np.savez(out_npz_path, kpts=outs['kpts'], feats=outs['feats'], size=np.array([height, width]))
+
+def print_matches(matches):
+    idx = 0
+    for m in matches:
+        print('matches[{}] = {}, {}, {}'.format(idx, m.queryIdx, m.trainIdx, m.distance))
+        idx+=1
+
+    return
 
 def main(config):
 
@@ -219,10 +319,31 @@ def main(config):
     # for img_path in tqdm(img_paths):
     # photo = imread(img_path)
     # photo = cv2.imread(img_path, cv2.IMREAD_COLOR)
-    outs = detect_compute(photo=query_img, sess=sess, ops=ops, photo_ph=photo_ph, config=config)
+    query_out = detect_compute(photo=query_img, sess=sess, ops=ops, photo_ph=photo_ph, config=config)
+    train_out = detect_compute(photo=train_img, sess=sess, ops=ops, photo_ph=photo_ph, config=config)
 
+    matches = match(query_feat=query_out['feats'], train_feat=train_out['feats'])
+
+    print_matches(matches[:10])
+
+    # def draw_matches(img1, img2, kpts1, kpts2, matches)
+    outImg = draw_matches(query_image=query_img, query_pts=query_out['kpts'],
+                          train_image=train_img, train_pts=train_out['kpts'],
+                          matches=matches[:50])
+
+    cv2.imwrite('matches.png', outImg)
+
+    # img3 = cv2.drawMatches(query_img, outs1['kpts'], train_img, outs2['kpts'], matches[:10], None, flags=2)
+    # cv2.drawMatches(query_img, outs1['kpts'], train_img, outs2['kpts'], matches[:10], outImg)
+    #
+    # cv2.imshow('matches', img3)
+    # cv2.waitKey(0)
+
+    # plt.imshow(img3), plt.show()
     # 绘制和输出
-    dump_debug(name='debug.png', photo=query_img, outs=outs, config=config)
+    # dump_debug(name='debug.png', photo=query_img, outs=outs, config=config)
+
+    # 完成
 
     print('Done...')
 
