@@ -45,6 +45,13 @@ To run LF-Net for all images in a given directory, simply type:
 python run_lfnet.py --in_dir=images --out_dir=outputs
 ```
 
+## Running 2-view matching demo with OpenCV
+To run LF-Net for 2-view matching, simple type:
+
+```
+python test_one_match.py --train=test_1/daytime2.jpg --query=test_1/night2.jpg --out_dir=outputs
+```
+
 In addition, you can easily do the 2-view matching demo through
 `notebooks/demo.ipynb` .
 
